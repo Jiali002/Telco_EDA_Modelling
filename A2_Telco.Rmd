@@ -1,0 +1,482 @@
+---
+title: "Assignment 02 Solution"
+subtitle: "SQB7005 Statistical Laboratory"
+author: "Jiali Tian  (S2126002)"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true          # Display table of contents in HTML
+    toc_depth: 3       # Directory depth
+  pdf_document: default
+---
+<style> 
+  h1{font-size: 28px;}    /* Set the font size of the title */
+  h2{font-size: 24px;}    /* Modify the font size of the subtitle (h2) */
+  h3{font-size: 20px;} 
+</style>
+
+```{r setup, include=FALSE}
+# Using "{r echo = FALSE}" argument of the code block to hide the code and only show the output.
+# Display code and its output simultaneously when rendering the document
+knitr::opts_chunk$set(echo = TRUE)
+# Start with a clean environment
+rm(list = ls())
+```
+
+```{r warning=FALSE, message=FALSE}
+# Importing packages
+library(tidyverse) 
+library(dplyr) 
+library(plyr)
+library(ggplot2)
+library(cowplot)
+library(MASS)
+library(gridExtra)
+library(knitr)
+```
+
+# 1. Introduction
+## (1) Research Topic
+Telco data exploratory analysis and predictive analysis of customer churn.
+
+## (2) Background
+The Telco customer churn data contains information about a fictional telco company that provided home phone and Internet services to 7043 customers in California in Q3. It indicates which customers have left, stayed, or signed up for their service. Multiple important demographics are included for each customer, as well as a Satisfaction Score, Churn Score, and Customer Lifetime Value (CLTV) index.
+
+## (3) Data Sources and Information
+
+__Data Sources__: The data objects and sources studied in this article are as follows:
+
+```{r echo=FALSE}
+data.info <- data.frame(
+  Dataset_Name = c("heart failure"),
+  URL = c("https://www.kaggle.com/code/farazrahman/telco-customer-churn-logisticregression")
+)
+# Convert data information to Markdown format
+# col.names: Output object name, Change the symbol '_' to a space, align: Alignment of table content
+knitr::kable(data.info, format = "markdown", col.names = gsub("[_]", " ", names(data.info)), align = "ll")
+```
+
+__Basic Information__:
+
+a. Customers who left within the last month – the column is called Churn
+
+b. Services that each customer has signed up for – phone, multiple lines, internet, online security, online backup, device protection, tech support, and streaming TV and movies
+
+c. Customer account information – how long they’ve been a customer, contract, payment method, paperless billing, monthly charges, and total charges
+
+d. Demographic info about customers – gender, age range, and if they have partners and dependents
+
+The meaning of each variable is explained in the following table:
+
+```{r echo=FALSE}
+# Create a data frame of variable information
+feature.info <- data.frame(
+  Variable_Name = c("customerID", "gender", "SeniorCitizen", "Partner", "Dependents", "tenure", "PhoneService", "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod", "MonthlyCharges", "TotalCharges", "Churn"),
+  Type = c("chr", "chr", "int", "chr", "chr", "int", "chr", "chr", "chr", "chr", "chr", 
+           "chr", "chr", "chr", "chr", "chr", "chr", "chr", "num", "num", "chr"),
+  Description = c("Customer ID", "Whether the customer is a male or a female", "Whether the customer is a senior citizen or not (1, 0)", "Whether the customer has a partner or not (Yes, No)", "Whether the customer has dependents or not (Yes, No)", "Number of months the customer has stayed with the company", "Whether the customer has a phone service or not (Yes, No)", "Whether the customer has multiple lines or not (Yes, No, No phone service)", "Customer’s internet service provider (DSL, Fiber optic, No)", "Whether the customer has online security or not (Yes, No, No internet service)", "Whether the customer has online backup or not (Yes, No, No internet service)", "Whether the customer has device protection or not (Yes, No, No internet service)", "Whether the customer has tech support or not (Yes, No, No internet service)", "Whether the customer has streaming TV or not (Yes, No, No internet service)", "Whether the customer has streaming movies or not (Yes, No, No internet service)", "The contract term of the customer (Month-to-month, One year, Two year)", "Whether the customer has paperless billing or not (Yes, No)", "The customer’s payment method (Electronic check, Mailed check, Bank transfer (automatic), Credit card (automatic))", "The amount charged to the customer monthly", "The total amount charged to the customer", "Whether the customer churned or not (Yes or No)")
+)
+# Convert variable information to Markdown format
+kable(feature.info, format = "markdown", col.names = gsub("[_]", " ", names(feature.info)), align = "llll")
+```
+
+__Content__: Each row represents a customer, each column contains customer’s attributes described on the column Metadata.
+
+```{r}
+# Load data
+file_path = "WA_Fn-UseC_-Telco-Customer-Churn.csv"
+Telco = read.csv(file_path, header = TRUE)
+# Display first five rows
+head(Telco, 5)
+# Check the type of variables
+str(Telco)
+```
+
+## (4) The Purpose of Analysis
+The main purpose of this analysis is to extract valuable insights from the Telco dataset. It aims to achieve the following key objectives:
+
+__Exploratory Analysis__: Use Exploratory Data Analysis (EDA) techniques to reveal those variables that have a large impact. Analyze the potential patterns in the data, find any outliers, identify missing values, and reveal potential trends in the dataset.
+
+__Correlation and Impact Assessment__: Find the correlation between user churn and various behaviors. Relationships and potential correlations between behavioral characteristics to reveal interdependencies. Understand the reasons for customer churn by considering different service methods and fees charged separately.
+
+__Prediction Model__: Based on the information provided, develop a logistic regression model to assess and predict whether a customer will churn.
+
+# 2. Problem Statement
+
+__Problem Statement__
+
+In the Internet age, telecommunication network services are an essential part of life. Telecommunications business customers are very picky about the type of telecommunications services they receive and judge the entire company based on one experience. As telecommunications services continue to evolve, there are generally several different telecommunications companies for customers to choose from. Once a customer is lost, it will take more time to get him back. So customer churn analysis becomes very critical! The higher the customer churn rate, the more customers stop buying from your business, which directly affects revenue! Therefore, based on the insights gained from customer churn analysis, companies can develop strategies, target market segments, and improve the quality of services provided to improve customer experience, thereby cultivating trust with customers.
+
+__Questions__
+
+In order to arouse the reader's interest and make the framework of the tedious research content below clearer. Based on the content of this data, several research questions were designed and raised as follows:
+
+__Question 1__: Analyze the proportion of people who choose different types of telecommunications services. Is there any connection between these services?
+
+__Question 2__: As the customers subscribe service period extends, will the number of customers churn increase?
+
+__Question 3__: Will the increase in value-added telecommunications services lead to customer churn?
+
+__Question 4__: Is customer churn related to the per months fees they pay?
+
+__Question 5__: Fit a logistic regression model to find and explain the effects of significant variables.
+
+Note: These questions correspond to the Exploratory Analysis and Visualization section later.
+
+# 3. Results and Discussion
+
+## (1) Data Preparation and Cleaning
+The purpose of checking and cleaning data is to allow the research to proceed correctly and smoothly.
+By inspecting the data set, it was confirmed that the data content and sample size were correct.
+
+### i) Check missing values
+```{r} 
+# Check for missing values in the entire dataset
+any(is.na(Telco))
+# Missing variables
+Telco %>%
+  map_df(function(x) sum(is.na(x))) %>%
+  gather(variable, value, customerID:Churn) %>%
+  arrange(desc(value)) %>%
+  ggplot(aes(x = variable, y = value)) +
+  geom_col(fill = "blue") +
+  coord_flip() + 
+  labs(y = "Missing Observations") +
+  ggtitle("Number of missing observations")
+```
+
+There are some missing values (NA) in the TotalCharges variable.
+
+```{r} 
+# Correlation between Total Charges and Total Charges hat
+Telco %>%
+  dplyr::select(tenure, MonthlyCharges, TotalCharges, Churn) %>%
+  mutate(TotalCharges_hat = MonthlyCharges * tenure) %>%
+  filter(!is.na(TotalCharges)) %>%  # Correct filtering of missing values
+  ggplot(aes(x = TotalCharges_hat, y = TotalCharges, color = Churn)) +
+  geom_point() +
+  facet_grid(. ~ Churn) +
+  geom_smooth(method = "lm", colour = "black") +
+  ggtitle("Total Charge vs (Monthly-cost * tenure)")
+# Replace missing values with product of MonthlyCharges times tenure
+Telco <- Telco %>%
+  mutate(TotalCharges = ifelse(is.na(TotalCharges), MonthlyCharges * tenure, TotalCharges))
+# Check for missing values in the entire dataset
+any(is.na(Telco))
+```
+
+It can be seen that there is a strong linear relationship between "TotalCharges" and "MonthlyCharges * tenure", so interpolation is used to fill in the missing values.
+
+### ii) Check duplicates data
+```{r}
+# Check for duplicate rows by using duplicated() function
+# Extract not unique elements
+duplicate_rows <- Telco[duplicated(Telco), ]
+# Display duplicate rows (if any)
+if (nrow(duplicate_rows) > 0) {
+  print("Duplicate Rows:")
+  print(duplicate_rows)
+} else {
+  print("No duplicate rows found.")
+}
+```
+
+### iii) Changed type of data
+
+There are three continuous variables and they are Tenure, MonthlyCharges and TotalCharges. SeniorCitizen is in 'int' form, that can be changed to categorical.
+
+```{r}
+Telco <- Telco[complete.cases(Telco),]
+Telco$SeniorCitizen <- as.factor(ifelse(Telco$SeniorCitizen==1, 'YES', 'NO'))
+```
+## (2) Exploratory Data Analysis and Visualization
+
+### i) Data distribution
+
+```{r echo=FALSE}
+# factor variables
+Telco$Churn <- as.factor(Telco$Churn)
+Telco$gender <- as.factor(Telco$gender)
+Telco$Partner <- as.factor(Telco$Partner)
+Telco$PhoneService <- as.factor(Telco$PhoneService)
+Telco$InternetService <- as.factor(Telco$InternetService)
+Telco$OnlineSecurity <- as.factor(Telco$OnlineSecurity)
+Telco$MultipleLines <- as.factor(Telco$MultipleLines)
+Telco$OnlineBackup <- as.factor(Telco$OnlineBackup)
+Telco$DeviceProtection <- as.factor(Telco$DeviceProtection)
+Telco$TechSupport <- as.factor(Telco$TechSupport)
+Telco$StreamingTV <- as.factor(Telco$StreamingTV)
+Telco$StreamingMovies <- as.factor(Telco$StreamingMovies)
+Telco$Contract <- as.factor(Telco$Contract)
+Telco$PaperlessBilling <- as.factor(Telco$PaperlessBilling)
+Telco$PaymentMethod <- as.factor(Telco$PaymentMethod)
+Telco$SeniorCitizen <- as.factor(Telco$SeniorCitizen)
+
+# Rename the levels in the variables column
+Telco$Contract <- revalue(Telco$Contract, c("Month-to-month" = "1M", "One year" = "1Y", "Two year" = "2Y"))
+Telco$MultipleLines <- revalue(Telco$MultipleLines, c("No phone service" = "NPS"))
+Telco$InternetService <- revalue(Telco$InternetService, c("Fiber optic" = "FO"))
+Telco$DeviceProtection <- revalue(Telco$DeviceProtection, c("No internet service" = "NIS"))
+Telco$OnlineBackup <- revalue(Telco$OnlineBackup, c("No internet service" = "NIS"))
+Telco$OnlineSecurity <- revalue(Telco$OnlineSecurity, c("No internet service" = "NIS"))
+Telco$TechSupport <- revalue(Telco$TechSupport, c("No internet service" = "NIS"))
+Telco$StreamingTV <- revalue(Telco$StreamingTV, c("No internet service" = "NIS"))
+Telco$StreamingMovies <- revalue(Telco$StreamingMovies, c("No internet service" = "NIS"))
+Telco$PaymentMethod <- revalue(Telco$PaymentMethod, 
+                               c("Electronic check" = "Eltc", "Mailed check"="Mail", 
+                                 "Bank transfer (automatic)"="Bank", "Credit card (automatic)"="Cred")) 
+```
+
+
+For the presentation of categorical data, a part of the histogram and part of the pie chart are used, where the histogram gives the specific quantity and the pie chart uses the proportion.
+
+```{r message=FALSE}
+# Prepare data for plotting histograms of categorical variables
+category = c("OnlineSecurity", "OnlineBackup", "DeviceProtection", 
+             "StreamingMovies", "TechSupport", "StreamingTV" , "InternetService")
+# Select only the categorical columns
+Telco_cat <- Telco[, category]
+# Convert wide format to long format
+Telco_long <- Telco_cat %>% gather(key = "variable", value = "value")
+# Plot histograms for each categorical variable
+hist_plot <- ggplot(Telco_long, aes(x = value)) +
+  geom_bar(color = "white", fill = "#0192B1", width = 1) + 
+  geom_text(
+    stat = "count", size = 3, vjust = 1, col = "black",
+    aes(label = after_stat(count)),
+    position = position_dodge(1)
+  ) +
+  labs(x = "Value", y = "Count") +
+  theme_minimal() +
+  facet_wrap(~ variable, scales = "free", ncol = 3)
+# Display the plot
+print(hist_plot)
+```
+
+For the histogram above:
+
+__a__. The number of people who chose “No internet service” was all 1526. 
+
+__b__. The ratios of “StreamingMovies” and “StreamingTV” are almost the same. 
+
+__c__. The ratios of "InternetService", “DeviceProtection” and “OnlineBackup” are almost the same. 
+
+__d__. The ratios of “TechSupport” and “OnlineSecurity” are almost the same.
+
+For b,c,d. These two services can be classified into the same category. It shows that there is a connection between the two.
+
+```{r}
+# Function to create a pie chart with proportions
+create_pie_chart <- function(data, column) {
+  df <- as.data.frame(table(data[[column]]))
+  colnames(df) <- c("category", "count")
+  df$proportion <- df$count / sum(df$count) * 100
+  ggplot(df, aes(x = "", y = count, fill = category)) +
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar(theta = "y", start = 0) +
+    theme_void() +
+    geom_text(
+      size = 3, vjust = 1, col = "black",
+      aes(label = paste0(round(proportion, 1), "%")),
+      position = position_stack(vjust = 0.5)
+      ) +
+    ggtitle(paste(column)) +
+    theme(legend.title = element_blank()) + 
+    theme_void() 
+}
+# Create pie charts
+p2 <- create_pie_chart(Telco, "PaperlessBilling")
+p3 <- create_pie_chart(Telco, "MultipleLines")
+p4 <- create_pie_chart(Telco, "PhoneService")
+p5 <- create_pie_chart(Telco, "PaymentMethod")
+# Combine all pie charts into a single plot
+grid.arrange(p3, p4, p2, p5, nrow = 2)
+```
+
+For the pie chart above:
+
+__a__: For pie chart "MultipleLines" and "PhoneService":
+
+The proportion of "No phone service" in 'MultipleLines' is equal to "No" in 'PhoneService', that is 9.7%. And 48.1% + 42.2% = 90.3%. This pie chart indicates that the variable ‘PhoneService’ is fully subsumed within the ‘MultipleLines’ variables. 
+
+‘No’ can be interpreted as a single phone line,
+
+‘Yes’ can be interpreted as a multiple phone lines,
+
+‘No phone service’ can be interpreted as no phone line.
+
+__b__: For pie chart "PaperlessBilling" and "PaymentMethod": we can know the proportion from "PaperlessBilling" and "PaymentMethod".
+
+```{r}
+# create a stacked bar plot to show the proportion of Churn within each gender
+s1 = ggplot(Telco, aes(gender, fill = Churn)) + 
+  geom_bar() +
+  labs(title = "Proportion of Churn by gender", y = "Proportion") +
+  theme_minimal()  +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "orange"))
+s2 = ggplot(Telco, aes(gender, fill = Partner)) + 
+  geom_bar() +
+  labs(title = "Proportion of Partner by gender", y = "Proportion") +
+  theme_minimal()  +
+  scale_fill_manual(values = c("No" = "skyblue", "Yes" = "orange"))
+# Combine pie charts into a single plot
+grid.arrange(s1, s2, nrow = 1)
+```
+
+For the stacked bar chart above:
+
+__a__: For the first graph. The proportion of customer churn among males is very close to that among females, which shows that the cause of customer churn is not strongly related to gender.
+
+__b__: For the second graph. The proportion of men and women who have a partner is almost the same.
+
+Answer __Question 1__: 
+
+The Telco dataset contains 21 variables with relationships between them. There is a strong linear relationship between "TotalCharges" and "MonthlyCharges * tenure". Different service types can be grouped together, for example, services can be grouped into TV services (StreamingTV and StreamingMovies), support services (DeviceProtection and TechSupport), and online protection services (OnlineSecurity and OnlineBackup).
+
+### ii) The relationship between tenure and customer churn
+
+```{r}
+# Create a density to show the distribution of churn under tenure
+Churn_tenure <- ggplot(Telco, aes(x = tenure, fill = factor(Churn))) +
+  geom_density(position = "identity", alpha = 0.6) +              # for two group plot the density
+  labs(x = "Time (Months)", y = "Density") +
+  theme_minimal() +
+  scale_fill_manual(
+    name = "Churn Status",                                   # set the legend title
+    values = c("skyblue", "#FF7F50")
+  ) +
+  theme(
+    legend.position = "right",                                    # set the position of legend
+    plot.title = element_text(size = 12, hjust = 0.5),            # Adjust plot title size and position
+    plot.margin = margin(0, 0, 0, 0, "cm")                        # Add margins around the plot
+  )
+# Resize the graph using the plot_grid() of the cowplot package
+plot_grid(Churn_tenure, label_size = 12,         # add label title, and adjust the size
+          labels = c("Distribution of Churn by tenure"),
+          ncol = 1, nrow = 1, scale = c(0.8, 0.8) ) 
+```
+
+Answer __Question 2__:
+
+The churned curve (Status Yes) is gradually decreasing. The fewer months a customer stays with the company, the more customers churn.
+
+### iii) The impact of total services and average costs on churn
+
+For the analysis of part i), perform the following operations on the Telco data:
+
+__I__. Group services into TV services (StreamingTV and StreamingMovies), Support services (DeviceProtection and TechSupport), Online protection service (OnlineSecurity and OnlineBackup). 
+
+__II__. Divided the tenure months into annual bands.
+
+__III__. Generates additional variables (6 new variables) with a focus of increasing predictive power of the model in upcoming sections. 
+That contains "TotalServices", "AverageMonthlyCost", "Tenure_bands", "TV_Services", "Support_Services", "OnlineProtection_Services."
+
+```{r} 
+# Capture all services which contained, using box-plot to draw the interrelationship
+Telco <-
+  Telco %>%
+  # Group services into TV services, Support services & Online protection service
+  mutate(TotalServices = 
+           ifelse(PhoneService == "Yes", 1, 0) +
+           ifelse(InternetService != "No", 1, 0) +
+           ifelse(OnlineSecurity == "Yes", 1, 0) +
+           ifelse(OnlineBackup == "Yes", 1, 0) +
+           ifelse(DeviceProtection == "Yes", 1, 0) +
+           ifelse(TechSupport == "Yes", 1, 0) +
+           ifelse(StreamingTV == "Yes", 1, 0) +
+           ifelse(StreamingMovies == "Yes", 1, 0)
+         ) %>%
+  # Divided the tenure months into annual bands.
+  mutate(
+    AverageMonthlyCost = MonthlyCharges / TotalServices,
+    Tenure_bands = factor(
+      case_when(tenure < 12 ~ "< 12 Months",
+                tenure >= 12 & tenure < 24 ~ "12 - 24 Months",
+                tenure >= 24 & tenure < 36 ~ "24 - 36 Months",
+                tenure >= 36 & tenure < 48 ~ "36 - 48 Months",
+                tenure >= 48 ~ ">= 48 Months"),
+      # capture customers that do subscribe to any internet service
+      levels = c("< 12 Months", "12 - 24 Months", "24 - 36 Months","36 - 48 Months", ">= 48 Months")),
+         TV_Services = factor(
+           ifelse(StreamingTV == "Yes" | StreamingMovies == "Yes", "Yes", "No"), levels = c("Yes", "No")),
+         Support_Services = factor(
+           ifelse(DeviceProtection == "Yes" | TechSupport == "Yes", "Yes", "No"), levels = c("Yes", "No")),
+         OnlineProtection_Services = factor(
+           ifelse(OnlineSecurity == "Yes" | OnlineBackup == "Yes", "Yes", "No"), levels = c("Yes", "No")))
+# Box-plot for Total services and AverageMonthlyCost
+grid.arrange(
+  top = "TotalServices VS. AverageMonthlyCost",
+  Telco %>% 
+    dplyr::select(TotalServices, Churn, Tenure_bands) %>%
+    ggplot(aes(x = Churn, y = TotalServices, fill = Churn)) +
+    geom_boxplot() +
+    facet_grid(. ~ Tenure_bands) +
+    theme(plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), legend.position="top") +
+    labs(x = NULL),
+  Telco %>%
+    dplyr::select(AverageMonthlyCost, Churn, Tenure_bands) %>%
+    ggplot(aes(x = Churn, y = AverageMonthlyCost, fill = Churn)) +
+    geom_boxplot() +
+    facet_grid(. ~ Tenure_bands) +
+    theme(legend.position="none"), nrow = 2)
+```
+
+Answer __Question 3__:
+
+From the TotalServices chart we can see that, in general, customers who subscribe to more services are more likely to churn, especially as the service term increases.
+
+Answer __Question 4__:
+
+The higher the monthly payment for a customer who has subscribed to a telco's service for a shorter period of time, the higher the risk of churn.
+
+## (3) Modelling
+
+After performing a comprehensive exploratory analysis on a Telco data set, we may be very interested in knowing the model results for this data. Next, a logistic regression model were fitted.
+
+### i) Logistic regression model
+Since the target variable "Churn is a categorical variable, a logistic regression model is easy to obtain, but the logistic regression model may be affected by its dependence on feature scales. The result is as follows:
+
+```{r}
+# remove some variables
+remove_col <- c("customerID","StreamingMovies","DeviceProtection","OnlineSecurity","gender","tenure")
+Telco_update <- Telco[, !(names(Telco) %in% remove_col)]
+#Build the first model using all variables
+model1 <- glm(Churn ~., family = "binomial", data = Telco_update)
+summary(model1)
+# reduce variables by AIC
+model2 <- stepAIC(model1, direction="both", trace = 0)
+summary(model2)
+```
+
+Answer __Question 5__:
+
+The logistic model gives the significant variables "MultipleLines", "InternetService", "TechSupport", "Contract", "PaperlessBilling", "PaymentMethod", and "TotalCharges".
+
+For "MultipleLines", "InternetService", "TechSupport", this shows that users value these three types of services. Good service options will indeed reduce user churn.
+
+For "Contract", this shows that users value whether they can get contract guarantees. The longer the contract, the less likely users are to churn in the short term.
+
+For "PaperlessBilling", "PaymentMethod". Customers prefer the security of paper bills and are accustomed to choosing electronic payment methods.
+
+For "TotalCharges". Most non-premium customers may care about whether the total cost is reasonable. The total cost is also one of the reasons for customer churn.
+
+# Conclusion
+
+__(1)__ Telcos need to create an easy and affordable entry point for their services. Extensive focus on support services, online services, and TV services is needed during the first 6 months period, as this period is the most critical and uncertain for customers. Increase the volume of services to reduce the number of subscribers that churn in the early stages.
+
+__(2)__ Users also attach great importance to Internet services. Therefore, telecommunications companies need to promote the use of multiple lines and fiber-optic cables for telephone services and Internet services respectively. However, this will increase users' monthly expenses. Therefore, the main obstacle is that the starting point of the monthly fee needs to be adjusted.
+
+__(3)__ In addition, users feel reassured by the guarantee of paper bills. Providing customers with guarantees and allowing users to obtain convenient and fast payment methods is also one of the measures to prevent user churn.
+
+# References
+
+__1__. TANMAY DESHPANDE. (kaggle). *Telco Churn: EDA|CV Score (85%+)| F1 Score (80%+)*.  [https://www.kaggle.com/code/tanmay111999/telco-churn-eda-cv-score-85-f1-score-80](https://www.kaggle.com/code/tanmay111999/telco-churn-eda-cv-score-85-f1-score-80)
+
+__2__. Shakarchi, Ali and Mostafa, Salama and Saringat, Mohd and Mohammed, Dheyaa and Al-Dulaimi, Shihab and Jaber, Mustafa, *A Data Mining Approach for Analysis of Telco Customer Churn*, 07/2023 doi: [10.1109/AICCIT57614.2023.10218161](https://ieeexplore.ieee.org/document/10218161).
+
+# Session Information
+```{r echo = FALSE}
+sessionInfo()
+```
+
