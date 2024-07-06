@@ -4,11 +4,11 @@ subtitle: "SQB7005 Statistical Laboratory"
 author: "Jiali Tian  (S2126002)"
 date: "`r Sys.Date()`"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
     toc: true          # Display table of contents in HTML
     toc_depth: 3       # Directory depth
-  pdf_document: default
 ---
 <style> 
   h1{font-size: 28px;}    /* Set the font size of the title */
